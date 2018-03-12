@@ -1,0 +1,318 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+![something](banner.png)\  
+
+---
+title: "BANA 6610: Final Report"
+output: html_notebook
+---
+```{r echo=FALSE, include=FALSE}
+library(car)
+library(leaps)
+library(lmtest)
+library(knitr)
+library(kableExtra)
+options(knitr.table.format = "html") 
+# Set working directory
+setwd("~/OneDrive - The University of Colorado Denver/BANA 6610/Final Project")
+```
+
+#Executive Summary  
+>Our project team is VARS Consulting. NBCUniversal has contracted VARS Consulting to analyze box office performance and make strategic recommendations to assess their company’s financial performance for upcoming theatrical releases. As part of this consulting engagement we analyzed the box office data for both NBC Universal and other production companies and used it to drive key insights. In this report we detail how we have gathered and prepared the necessary information and satisfied the clients request using a multiple linear regression model. Finally, we use the selected model to predict likely box office outcomes.
+
+##Summary of Findings
+![something](key_questions.png)\  
+
+-------------------------------------------  
+
+##VARS Consulting: Data Science Process
+VARS Consulting utilized the following process for this engagement:  
+![something](process.png)\  
+
+-------------------------------------------  
+
+![](data_gathering.png)\  
+
+##Data Sourcing  
+We gathered data from two primary sources:  
+- **Internet Movie Database (IMDB):** has information related to movies and television shows such as, cast, budgets, plots, reviews etc.  
+```{r echo=FALSE, message=FALSE}
+
+# Bring numerical data in to R
+nbcu <- read.csv("nbcu.csv", header = T, sep = ",")
+kable(head(nbcu), "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 9) 
+```
+
+The description of these fields is as follows:
+```{r echo=FALSE, message=FALSE}
+dd <- read.csv("data_dict.csv", header = T, sep = ",")
+kable(dd, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 12) 
+```
+
+- **BoxOfficeMojo.com:** a box office reporting website that has budget data for movies. Here we used seasonal box office information.  
+
+```{r echo=FALSE, message=FALSE}
+seasons <- read.csv("mojo_seasons.csv", header = T, sep = ",")
+kable(head(seasons[,1:9]), "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 12) 
+```
+
+
+##Data Combining  
+We created Excel formulas to identify the season that each release date belonged to so that we could have a master dataset to work with. This final master dataset looked like this:
+```{r echo=FALSE, message=FALSE}
+combined <- read.csv("combined.csv", header = T, sep = ",")
+kable(head(combined), "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 9) 
+```
+
+-------------------------------------------  
+
+![](preparing_data.png)\  
+
+##Feature Evaluation
+The table below indicates how all the orignal features were evaluated and modified.  
+```{r echo=FALSE, message=FALSE}
+feat_eval <- read.csv("feature_eval.csv", header = T, sep = ",")
+kable(feat_eval, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 10) 
+```
+
+
+##Observation Evaluation
+Our client asked us to focus strictly on their live-action, feature films that were released in the US over the last 5 years. Therefore, we removed observations with the following attributes:  
+- **International Movies:** Movies from production companies outside the US were removed, and were not factored in to our exploratory data analysis.  
+- **Genre filtering:** Movies with genre1 of 'Animation', or 'Documentary' were filtered out at client's request.  
+- **Release Date filtering:** Movies prior to July of 2012 were filtered out at the client's request.  
+- **Runtime filtering:** Only movies with a runtime of 80 minutes or longer are officially recognized as feature films. Therefore, due to client's requirements, and film with a runtime less that 80 minutes was eliminated.  
+
+##Missing Data Remediation
+Once we had filtered out observations that were not to be used we still had some missing values that need to be dealt with. Here is how we handled those features with missing values:  
+- **Budget & Box Office Gross:** Any movie that had been released but budget and/or box office gross total could not be obtained were eliminated from the dataset. We did not feel these values could be reliably imputed due to vast variance in these numbers.  
+- **IMDB rating, IMDB votes, &Metacritic Score:** These values were fairly normally distributed so we imputed missing values by using the feature's median value.
+
+##Feature Engineering
+At VARS Consulting, our domain knowledge allows us to create meaningful features using source data to enhance the model input data and provide the best possible results. We engineered, or added, several features based on proprietary criteria to enable very high cardinality categorical data such as Production Company, Director, & Actors to provide meaning. This is especially needed because past success for Directors and Actors can heavily influence future movie performance. Our methodology was as follows:  
+**Box Office Performance Points**  
+>Each movie was ranked according to lifetime box office performance. We then identify movies that were ranked 1-10 as Top 10 movies, movies ranked 11-50 as Top 50 movies, and movies ranked 51-250 as Top 250 movies. Each Production, Director and Actor in the data set was then awarded 250 performance points for each movie in the Top 10, 50 performance points for each movie in the Top 50, and 10 performance points for each movie in the Top 250.    
+[Performance Points] = [ SUM(Top 10 Count) x 250 ] + [ SUM(Top 50 Count) x 50 ] + [ SUM(Top 250 Count) x 10 ]  
+
+An example, for Directors, shows high ranking directors according to the formula and gives us a meaningful continuous variable to assist with modeling:
+```{r echo=FALSE, message=FALSE}
+
+# Bring numerical data in to R
+directors <- read.csv("directors.csv", header = T, sep = ",")
+kable(directors, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 12) 
+```
+
+##Importing The Data
+Finally, we brought our cleaned and prepared dataset in to R to begin data analysis and model building.  
+
+```{r echo=FALSE}
+
+# Bring numerical data in to R
+all_vars <- read.csv("BoxOffice4.csv", header = T, sep = ",")
+kable(head(all_vars), "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left", font_size = 9) 
+
+```
+
+
+-------------------------------------------  
+
+![](data_analysis.png)\  
+
+##Exploring The Data
+Exploratory data analysis is an approach that utilizes various techniques to detect any mistakes, check underlying assumptions and roughly determine the relationship among the explanatory variables. Some EDA techniques are graphical in nature whereas some are quantitative. 
+
+Depending on the type of data that has to be explored, the exploratory data analysis can be of the following:
+
+- **Univariate Non-graphical**  
+- **Multivariate Non-graphical**  
+- **Univariate Graphical**  
+- **Multivariate Graphical**  
+
+We checked some box-plots as they show robust measures of location and spread along with information about symmetry and outliers. Similarly histograms were reviewed as they quickly depict the central tendency and modality of the data.
+
+In case of our client, we considered certain numerical values for conducting exploratory data analysis. The run time of the movies, number of votes on IMDb in last 5 years and the available budget of every movie was studied from its graphical nature.
+Here are some of our findings:
+
+![](runtime.png)\  
+![](votes.png)\  
+![](budget.png)\  
+
+In addition, both the season the movie is released and the rating given by the MPAA can have a significant impact on the box office performance as seen in these graphs:  
+
+![](Box_Office_genre_Spring.png)\  
+![](Box_Office_genre_Summer.png)\  
+![](Box_Office_genre_Fall.png)\  
+![](Box_Office_genre_Winter.png)\  
+![](Box_Office_genre_Holiday.png)\  
+
+The combination of rating, and season also creates significant variation in performance:
+
+![](Box_Office Gross_genre_ratingGroup.png)\  
+
+As per the EDA we observed that the data was skewed for certain parameters, and needed smoothing. We cannot always rely on data uploaded by the source and therefore, we had to make some modifications and clean the data to make it relevant for superior analysis.
+
+-------------------------------------------  
+
+![](predictive_analysis.png)\  
+
+##Multiple Linear Regression - Initial Assessment
+At first, we simply build a model that utilizes all data to evaluate the potential of a linear model for the client:  
+```{r message=FALSE, warning=FALSE}
+bo <- lm(Box.Office.Gross ~ .
+         ,data = all_vars)
+summary(bo)
+par(mfrow = c(2, 2))
+plot(bo)
+```
+
+##Multiple Linear Regression - Best Subset
+The initial look makes us believe we have a data structure conducive to linear regression, but we need to find the _simplest_ combination of dependent variables that still produces _acceptable_ results. To do this we employ a best subset approach:  
+
+```{r}
+# BEGIN best subset approach
+#
+
+best.subset <- regsubsets(Box.Office.Gross~., all_vars, nvmax = 30, nbest = 10, really.big = T)
+best.subset.summary <- summary(best.subset)
+
+# Show plots evaluating the results of best subset approach
+par(mfrow=c(2,2))
+plot(best.subset$rss, xlab="Number of Variables", ylab="RSS", type="l")
+plot(best.subset.summary$adjr2, xlab="Model Index Number", ylab="Adjusted RSq", type="l")
+plot(best.subset.summary$cp, xlab="Model Index Number", ylab="CP", type="l")
+plot(best.subset.summary$bic, xlab="Model Index Number", ylab="BIC", type="l")
+```
+
+In addition to R-squared, Adjusted R-squared, C~p~, & BIC values we need to understand VIF and Durbin Watson values of each prospective model to make the best possible selection. VARS Consulting adds these values to the best subset data frame as follows:  
+
+```{r message=FALSE}
+bt <- best.subset.summary$which
+best.subset.tests <- data.frame(vif=double(),dwtval=double(),dwpval=double())
+for (i in 1:length(bt[,2])) {
+  loop_df <- all_vars
+  for (j in 1:13) {
+    if (bt[i,j] == FALSE) {
+      loop_df <- loop_df[,!names(loop_df) %in% colnames(bt)[j]]
+      #print(colnames(bt)[j])
+    } #else {print("It's false")}
+  }
+  vif_val <- -999
+  dwt_val <- -999
+  dwp_val <- -999
+  tryCatch({
+    vif_val <- max(vif(lm(Box.Office.Gross ~.,data = loop_df))[,3])
+    dwt_val <- durbinWatsonTest(lm(Box.Office.Gross ~.,data = loop_df))$dw
+    dwp_val <- durbinWatsonTest(lm(Box.Office.Gross ~.,data = loop_df))$p
+  }, error=function(e){})
+  best.subset.tests[i,1] <- vif_val
+  best.subset.tests[i,2] <- dwt_val
+  best.subset.tests[i,3] <- dwp_val
+}
+
+
+all_results <- data.frame(best.subset.summary$rsq,best.subset.summary$adjr2,best.subset.summary$cp,best.subset.summary$bic,best.subset.tests)
+```
+
+Finally, we filter the data frame to find the prospective model that meets all of our criteria thresholds:  
+
+```{r message=FALSE}
+# Filter data frame to find models that meet all criteria
+all_results[all_results$vif < 5 & all_results$vif > 0 & all_results$best.subset.summary.rsq > .7 & all_results$best.subset.summary.adjr2 > 0.7 & all_results$dwtval > 1.95 & all_results$dwtval < 2.05,] #& all_results$dwtval > 2.00
+
+# Show variables of selected model
+best.subset.summary$which[82,]
+```
+
+##Multiple Regression - Final Model Selection
+The model chosen, based on our _proprietary_ best subset approach tells us that the simplest model that performs best includes:  
+- Season Daily Average  
+- Budget  
+- Director Performance Points  
+- Lead Actor 1 Performance Points  
+- Rating Genre Performance Points  
+- Box Office Season  
+- Genre 1 
+
+This is good confirmation that VARS Consulting feature engineering efforts were of significant value to the final model.  
+
+```{r message=FALSE, warning=FALSE}
+bo4 <- lm(Box.Office.Gross ~
+            Season.Daily.Avg
+            + Budget
+            + Director.Perf.Pts
+            + Lead1.Perf.Points
+            + Rating.Genre.Perf.Pts
+            + Box.Office.Season
+            + genre1
+            ,data = all_vars)
+
+summary(bo4)
+par(mfrow = c(2, 2))
+plot(bo4)
+
+vif(bo4)
+durbinWatsonTest(bo4)
+```
+
+Finally, we plot the resulting model to evaluate how close our predictions are to actual data:  
+
+```{r message=FALSE}
+par(mfrow = c(1, 1))
+plot(predict(bo4),all_vars$Box.Office.Gross,
+     xlab="Predicted Box Office Gross $",ylab="Actual Box Office Gross $")
+abline(a=0,b=1)
+```
+
+
+-------------------------------------------  
+
+![](knowledge.png)\  
+
+##Predicting Future Performance
+
+Based on the best model we have made predictions for the Box office gross. Here is the data for the client's upcoming theatrical releases:  
+
+```{r echo=FALSE, message=FALSE}
+feat <- read.csv("futureDataSet.csv",sep=",",header = T)
+feat_names <- names(feat)
+kable(feat_names, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left") 
+kable(feat, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left") 
+```
+
+Finally, we predict future box office revenue using our model:  
+
+```{r message=FALSE}
+predict(bo4,feat)
+```
+
+![](Prediction.png)\  
+
+![](GrossVsSeason.png)\  
+
+-------------------------------------------  
+
+#Conclusion
+
+##Interpretation:
+
+-If a movie of duration 105 mins with action genre is released in winter season the Box office gross is expected to be $81,059,502.  
+-If a movie of duration 105 mins with horror genre is released in summer season the Box office gross is expected to be $308,588,176.  
+-If a movie of duration 105 mins with comedy genre is released in fall season the Box office gross is expected to be $15,109,763.  
+-If a movie of duration 105 mins with adventure genre is released in holiday season the Box office gross is expected to be $264,754,577.  
+
+![](contact.png)\  
+
+
+
